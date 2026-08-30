@@ -24,17 +24,17 @@ RUN pip install --upgrade pip && pip install .
 
 COPY app ./app
 
-# Optional: bake a pre-seeded cache into the image.
+# No seed is copied in here on purpose.
 #
-# Cloud Run's filesystem is ephemeral and there is no volume to mount, so a
-# cache written at runtime dies with the instance. Baking the seed in means
-# every instance starts able to answer for the seeded profiles even if the
-# LinkedIn session has expired — which is the state a reviewer is most likely
-# to arrive in, and the state that took down most comparable deployments.
+# An earlier version used `COPY seed-cache.db* /seed/`, which fails the build
+# outright when the glob matches nothing — and it matches nothing on any host
+# that builds from git, because the seed is gitignored. Docker treats an
+# unmatched COPY source as an error, not a no-op.
 #
-# The file is gitignored, so this is a no-op unless it exists at build time.
-# Build it first with: python3 scripts/seed_cache.py
-COPY --chown=appuser:appuser seed-cache.db* /seed/
+# The seed now arrives at runtime instead, via SEED_CACHE_FILE pointing at a
+# secret file the host mounts. That works identically whether the build context
+# comes from git or from a local directory, and keeps scraped profile data out
+# of both the repository and the image layers.
 
 # The entrypoint restores a baked seed into CACHE_PATH on a cold start, so an
 # ephemeral host still answers for the seeded profiles from the first request.
