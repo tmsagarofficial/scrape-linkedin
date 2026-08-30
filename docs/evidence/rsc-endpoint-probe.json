@@ -1,0 +1,10 @@
+[
+  {
+    "case": "slug only",
+    "impersonate": "chrome142",
+    "status": 200,
+    "bytes": 755801,
+    "kind": "RSC flight stream",
+    "redirect": ""
+  }
+]

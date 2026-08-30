@@ -1,0 +1,50 @@
+[
+  {
+    "entry": 89,
+    "kind": "component",
+    "component": "com.linkedin.sdui.generated.profile.dsl.impl.profileCardsActivity",
+    "status": 200,
+    "bytes": 372691,
+    "file": "entry89_profileCardsActivity.txt"
+  },
+  {
+    "entry": 106,
+    "kind": "server-request",
+    "component": "com.linkedin.sdui.requests.profile.fetchProfileDiscoveryDrawer",
+    "status": 200,
+    "bytes": 405,
+    "file": "entry106_fetchProfileDiscoveryDrawer.txt"
+  },
+  {
+    "entry": 115,
+    "kind": "component",
+    "component": "com.linkedin.sdui.generated.profile.dsl.impl.profileCardsBelowActivityPart1",
+    "status": 200,
+    "bytes": 55074,
+    "file": "entry115_profileCardsBelowActivityPart1.txt"
+  },
+  {
+    "entry": 127,
+    "kind": "server-request",
+    "component": "com.linkedin.sdui.requests.profile.saveProfileToPdf",
+    "status": 200,
+    "bytes": 1493,
+    "file": "entry127_saveProfileToPdf.txt"
+  },
+  {
+    "entry": 131,
+    "kind": "component",
+    "component": "com.linkedin.sdui.generated.profile.dsl.impl.profileCardsActivity",
+    "status": 200,
+    "bytes": 372613,
+    "file": "entry131_profileCardsActivity.txt"
+  },
+  {
+    "entry": 136,
+    "kind": "server-request",
+    "component": "com.linkedin.sdui.impl.feedscreen.requests.feedBadgeRequest",
+    "status": 200,
+    "bytes": 405,
+    "file": "entry136_feedBadgeRequest.txt"
+  }
+]
