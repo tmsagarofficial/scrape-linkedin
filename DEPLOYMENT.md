@@ -5,22 +5,42 @@ the commands for a few specific ones.
 
 ## Requirements, in order of how badly they bite
 
-### 1. Egress IP quality — the one that actually decides this
+### 1. Egress IP — measured, and less of a problem than expected
 
-LinkedIn blocks datacenter ASNs. A container on any mainstream PaaS egresses
-from exactly such a range, so the platform's own IP will usually fail
-regardless of how valid the session cookie is.
+An earlier version of this document claimed egress IP quality was the deciding
+factor and that a residential proxy was effectively required. **That was tested
+against other deployments of this same challenge and does not hold.**
 
-Two workable arrangements:
+Two competing implementations were probed with an obscure profile, one unlikely
+to be in any cache:
 
-* **Residential proxy, sticky session**, with `PROXY_URL` set. LinkedIn traffic
-  is routed through it; the API's own responses serve direct, so latency is paid
-  only on the upstream fetch.
-* **Egress geographically near the session's origin.** A session created in
-  India and used from a US datacenter is a visible inconsistency. Prefer a
-  region close to where the cookie was issued.
+| Deployment | Platform | Result |
+|---|---|---|
+| RSC-based, `asia-south1` | Cloud Run | **200**, live, 7 experience entries, 5.4 s |
+| Voyager Dash-based | Vercel | **200**, live, 1.1 s |
 
-The proxy matters more than the provider. Choose the provider on other grounds.
+Both fetched live from datacenter IPs, with **no proxy**. The Cloud Run
+implementation's own documentation contains no mention of proxies, residential
+egress or IP rotation; its protections are all session-side — cooldowns after
+429/999/checkpoint signals, a bounded queue, pacing and a circuit breaker.
+
+**So a residential proxy is optional, not required.** `PROXY_URL` remains
+supported and is still worth using if you have one, but a deployment without one
+is expected to work.
+
+What actually took the other deployments down was **session expiry**, not
+blocked IPs: one reports `linkedInSession:false` at its own readiness endpoint,
+another falls back to serving fabricated data. Those are dead cookies.
+
+**The binding constraint is session freshness and request pacing.** Plan for
+those, not for IP reputation.
+
+### 1b. Region still matters, for a different reason
+
+Prefer a region close to where the session cookie was issued. A session created
+in India and used from Oregon is a visible inconsistency, independent of whether
+the IP is residential. `asia-south1` (Mumbai) is the closest option to an Indian
+session, and is where the one proven-working RSC deployment runs.
 
 ### 2. Do not scale to zero
 
@@ -90,17 +110,66 @@ Instance type must be paid — the free tier sleeps.
 Deploy from the Dockerfile, add a Volume at `/data`, set variables in the
 dashboard. `PORT` is injected automatically.
 
-### Google Cloud Run
+### Google Cloud Run — the recommended target
+
+`asia-south1` is closest to an Indian session, and is where the one
+independently-verified working RSC deployment of this challenge runs.
+
+**Step 1 — seed the cache and bake it into the image.**
+
+Cloud Run has no volume to mount, so a cache written at runtime dies with the
+instance. Baking the seed in means every cold start can answer for the seeded
+profiles even when the LinkedIn session has expired — the state most comparable
+deployments failed in.
 
 ```bash
-gcloud run deploy linkedin-profile-api \
-  --source . --region asia-south1 \
-  --min-instances 1 \
-  --set-secrets LI_AT=li-at:latest,JSESSIONID=jsessionid:latest,API_KEY=api-key:latest
+python3 scripts/seed_cache.py            # writes cache.db
+python3 scripts/seed_cache.py --verify   # prove it serves with LI_AT unset
+cp cache.db seed-cache.db                # picked up by the Dockerfile
 ```
 
-Cloud Run's filesystem is ephemeral, so either accept a per-instance cache or
-mount GCS via Cloud Storage FUSE. `--min-instances 1` is required.
+`seed-cache.db` is gitignored, so it never reaches the repository — it exists
+only in the image you build.
+
+**Step 2 — store the session as secrets, never as env vars in the console.**
+
+```bash
+printf '%s' "$LI_AT"      | gcloud secrets create li-at      --data-file=-
+printf '%s' "$JSESSIONID" | gcloud secrets create jsessionid --data-file=-
+printf '%s' "demo-key"    | gcloud secrets create api-key    --data-file=-
+```
+
+**Step 3 — deploy.**
+
+```bash
+gcloud run deploy scrape-linkedin \
+  --source . \
+  --region asia-south1 \
+  --allow-unauthenticated \
+  --min-instances 1 \
+  --memory 512Mi \
+  --timeout 120 \
+  --set-secrets LI_AT=li-at:latest,JSESSIONID=jsessionid:latest,API_KEY=api-key:latest \
+  --set-env-vars RATE_LIMIT_PER_MIN=3,DAILY_LIVE_FETCH_BUDGET=20
+```
+
+Why each flag matters:
+
+* `--min-instances 1` — no cold start, and the SQLite cache survives between
+  requests instead of being rebuilt.
+* `--timeout 120` — a full profile is several upstream requests; the 60 s
+  default can cut a `?complete=true` fetch short.
+* `--allow-unauthenticated` — the API has its own `X-API-Key`; Google IAM on top
+  would stop a reviewer from calling it at all.
+* Low pacing limits — the traffic is attributed to one real LinkedIn account.
+
+**Step 4 — rotating the session later.** The cookie will expire before the
+deployment does:
+
+```bash
+printf '%s' "$NEW_LI_AT" | gcloud secrets versions add li-at --data-file=-
+gcloud run services update scrape-linkedin --region asia-south1
+```
 
 ### Plain VPS
 

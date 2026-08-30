@@ -24,10 +24,29 @@ RUN pip install --upgrade pip && pip install .
 
 COPY app ./app
 
+# Optional: bake a pre-seeded cache into the image.
+#
+# Cloud Run's filesystem is ephemeral and there is no volume to mount, so a
+# cache written at runtime dies with the instance. Baking the seed in means
+# every instance starts able to answer for the seeded profiles even if the
+# LinkedIn session has expired — which is the state a reviewer is most likely
+# to arrive in, and the state that took down most comparable deployments.
+#
+# The file is gitignored, so this is a no-op unless it exists at build time.
+# Build it first with: python3 scripts/seed_cache.py
+COPY --chown=appuser:appuser seed-cache.db* /seed/
+
+# The entrypoint restores a baked seed into CACHE_PATH on a cold start, so an
+# ephemeral host still answers for the seeded profiles from the first request.
+COPY docker-entrypoint.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+
 # Run unprivileged. The cache directory must be writable by this user.
 RUN useradd --create-home --uid 10001 appuser \
     && mkdir -p /data && chown -R appuser:appuser /data /app
 USER appuser
+
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
 
 # Default cache location. Point CACHE_PATH at a mounted volume to make the
 # cache survive redeploys — without one it is rebuilt on every deploy, which
