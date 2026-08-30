@@ -192,6 +192,40 @@ class TestSuccess:
         assert response.json()["_meta"]["source"] == "partial"
 
 
+class TestPartialResponsesDoNotPoisonTheCache:
+    """A narrowed `?fields=` response must not replace a complete cached one.
+
+    Observed in practice: a profile cached with five experience entries came
+    back with zero after a later `?fields=skills` request overwrote it. The
+    cache key does not encode the field set, so only complete responses are
+    written.
+    """
+
+    def test_narrowed_response_is_not_cached(self, api, monkeypatch):
+        stub_fetch(monkeypatch)
+        api.get("/v1/profile/x?fields=skills", headers=HEADERS)
+        assert main.cache.get("x") is None
+
+    def test_narrowed_response_says_it_was_not_cached(self, api, monkeypatch):
+        stub_fetch(monkeypatch)
+        meta = api.get("/v1/profile/x?fields=skills", headers=HEADERS).json()["_meta"]
+        assert any("not cached" in w for w in meta["warnings"])
+
+    def test_a_full_response_is_still_cached(self, api, monkeypatch):
+        stub_fetch(monkeypatch)
+        api.get("/v1/profile/x", headers=HEADERS)
+        assert main.cache.get("x") is not None
+
+    def test_a_complete_entry_survives_a_later_narrow_request(self, api, monkeypatch):
+        """The regression this exists to prevent."""
+        stub_fetch(monkeypatch)
+        api.get("/v1/profile/x", headers=HEADERS)              # full, cached
+        before = main.cache.get("x")[0]["profile"]["experience"]
+        api.get("/v1/profile/x?fields=skills&refresh=true", headers=HEADERS)
+        after = main.cache.get("x")[0]["profile"]["experience"]
+        assert after == before, "a narrowed fetch degraded the cached profile"
+
+
 class TestCompleteLists:
     """`?complete=true` swaps LinkedIn's truncated cards for full lists."""
 

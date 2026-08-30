@@ -274,8 +274,20 @@ def _serve(
     payload["_meta"]["warnings"].extend(result.warnings)
     payload["_meta"]["complete"] = complete
 
-    if session is None:
+    # Only cache a response that covered the full default section set.
+    #
+    # A narrowed request (`?fields=skills`) returns a profile with every other
+    # section empty. Writing that under the same key silently replaces a
+    # complete cached entry with a mostly-empty one — observed in practice: a
+    # profile cached with 5 experience entries came back with 0 after a later
+    # `?fields=skills` call. The cache key does not encode the field set, so
+    # the safe rule is to write only complete responses.
+    if session is None and set(sections) >= set(DEFAULT_SECTIONS):
         cache.put(public_id, payload)
+    elif session is None:
+        payload["_meta"]["warnings"].append(
+            "narrowed by ?fields, so this response was not cached"
+        )
     else:
         payload["_meta"]["source"] = "live"
         payload["_meta"]["warnings"].append(
