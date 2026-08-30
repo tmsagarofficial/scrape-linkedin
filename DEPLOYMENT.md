@@ -102,8 +102,38 @@ In `fly.toml`, mount the volume and keep a machine warm:
 
 ### Render
 
-Docker environment, add a Disk mounted at `/data`, set `CACHE_PATH=/data/cache.db`.
-Instance type must be paid — the free tier sleeps.
+Render builds from git, so it cannot see a local seed file. Use a **Secret
+File** instead, which is managed in the dashboard and never enters the
+repository.
+
+1. **New → Web Service**, connect the repo, runtime **Docker**, region
+   **Singapore** (closest to an Indian-issued session).
+2. **Environment → Secret Files → Add Secret File**
+   * Filename: `seed-cache.b64`
+   * Contents: paste the output of `base64 -w0 seed-cache.db`
+   Render mounts it at `/etc/secrets/seed-cache.b64`.
+3. **Environment variables:**
+
+   | Key | Value |
+   |---|---|
+   | `LI_AT` | your cookie (secret) |
+   | `JSESSIONID` | `ajax:...` (secret) |
+   | `API_KEY` | `demo-key` |
+   | `CACHE_PATH` | `/data/cache.db` |
+   | `SEED_CACHE_B64_FILE` | `/etc/secrets/seed-cache.b64` |
+   | `CACHE_TTL_SECONDS` | `2592000` |
+   | `RATE_LIMIT_PER_MIN` | `3` |
+   | `DAILY_LIVE_FETCH_BUDGET` | `20` |
+
+4. **Paid instance + a Disk at `/data`** if you want the cache to persist and
+   no cold start. On the **free tier** neither is available — but the entrypoint
+   restores the seed on every cold start, so the demo still answers for the
+   seeded profiles. Pair the free tier with an external ping to `/health` every
+   ten minutes to avoid the ~50 s wake-up; `/health` never calls LinkedIn, so
+   the ping costs nothing.
+
+**The seed never enters the repository on either path** — baked into the image
+on Cloud Run, or mounted as a secret file on Render.
 
 ### Railway
 
