@@ -50,6 +50,14 @@ app = FastAPI(
     description=(
         "Structured JSON for a LinkedIn profile URL, sourced by direct HTTP "
         "against LinkedIn's Server-Driven UI endpoints. No browser automation.\n\n"
+        "## Getting started\n\n"
+        "Every profile endpoint needs `X-API-Key`. This is a public demo, so "
+        "the key is **`demo-key`** — click **Authorize** above and paste it.\n\n"
+        "Profiles listed at `GET /v1/cache` are pre-seeded and answer even when "
+        "the demo's LinkedIn session has expired. For live data on any other "
+        "profile, supply your own session with the `X-LI-AT` and "
+        "`X-LI-JSESSIONID` headers — they are never logged, cached or "
+        "persisted, and such requests bypass the shared cache entirely.\n\n"
         "**Values are reconstructed from pre-rendered display strings.** See "
         "`_meta.parse_confidence` on every response to tell an inferred value "
         "from a supplied one."
@@ -71,18 +79,47 @@ def _rate_limited() -> bool:
     return len(_outbound) >= settings.rate_limit_per_min
 
 
+#: The published default. When the deployment still uses it, the API is a demo
+#: and there is nothing to protect by being coy about the value.
+DEMO_API_KEY = "demo-key"
+
+
 def require_api_key(
     x_api_key: Annotated[str | None, Header(alias="X-API-Key")] = None,
 ) -> str:
-    """§5: X-API-Key auth. The demo key is published in the README on purpose."""
+    """X-API-Key auth.
+
+    The key exists so a public URL is not an anonymous, unmetered scraper
+    running on someone's real LinkedIn account. But an unhelpful 401 is its own
+    failure: a reviewer who curls the URL without reading the README hits a dead
+    end and concludes the demo is broken.
+
+    So when the configured key is still the published demo default, the 401
+    names it. That keeps the auth layer real while removing the dead end.
+    A deployment that sets its own key gets a plain 401 with no hint, because
+    then the value genuinely is a secret.
+    """
     if not x_api_key or x_api_key != settings.api_key:
-        raise HTTPException(
-            status_code=401,
-            detail={
-                "error": "unauthorized",
-                "message": "Supply a valid X-API-Key header.",
-            },
-        )
+        detail = {
+            "error": "unauthorized",
+            "message": "Supply a valid X-API-Key header.",
+        }
+        if settings.api_key == DEMO_API_KEY:
+            detail["message"] = (
+                "Supply a valid X-API-Key header. This is a public demo and the "
+                f"key is not a secret: use '{DEMO_API_KEY}'."
+            )
+            detail["demo_api_key"] = DEMO_API_KEY
+            detail["example"] = (
+                f"curl -H 'X-API-Key: {DEMO_API_KEY}' "
+                "'<host>/v1/profile?url=https://www.linkedin.com/in/williamhgates/'"
+            )
+            detail["live_data"] = (
+                "Seeded profiles work with no LinkedIn session. For live data on "
+                "any other profile, send your own session as X-LI-AT and "
+                "X-LI-JSESSIONID — never logged, cached or persisted."
+            )
+        raise HTTPException(status_code=401, detail=detail)
     return x_api_key
 
 

@@ -102,6 +102,19 @@ class TestAuth:
         assert response.status_code == 401
         assert response.json()["detail"]["error"] == "unauthorized"
 
+    def test_401_names_the_demo_key(self, api):
+        """A reviewer who curls without reading must not hit a dead end."""
+        detail = api.get("/v1/profile/x").json()["detail"]
+        assert detail["demo_api_key"] == "demo-key"
+        assert "X-LI-AT" in detail["live_data"]
+
+    def test_401_hides_a_real_key(self, api, monkeypatch):
+        """The hint is for the published demo key only."""
+        monkeypatch.setattr(main.settings, "api_key", "s3cr3t-production-key")
+        detail = api.get("/v1/profile/x", headers={"X-API-Key": "wrong"}).json()["detail"]
+        assert "demo_api_key" not in detail
+        assert "s3cr3t" not in str(detail)
+
     def test_health_needs_no_key(self, api):
         assert api.get("/health").status_code == 200
 
