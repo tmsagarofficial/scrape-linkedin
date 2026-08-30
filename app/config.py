@@ -86,6 +86,12 @@ class Settings:
     #: 401 with no key may simply abandon the demo.
     api_key: str = field(default_factory=lambda: os.environ.get("API_KEY", "demo-key"))
 
+    #: Path to a JSON (or gzip+base64) cache seed, imported at startup when the
+    #: cache is empty. For hosts that build from git and cannot see local files.
+    seed_file: str = field(
+        default_factory=lambda: os.environ.get("SEED_CACHE_FILE", "")
+    )
+
     cache_path: str = field(
         default_factory=lambda: os.environ.get("CACHE_PATH", "cache.db")
     )

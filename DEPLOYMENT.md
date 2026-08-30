@@ -109,9 +109,10 @@ repository.
 1. **New → Web Service**, connect the repo, runtime **Docker**, region
    **Singapore** (closest to an Indian-issued session).
 2. **Environment → Secret Files → Add Secret File**
-   * Filename: `seed-cache.b64`
-   * Contents: paste the output of `base64 -w0 seed-cache.db`
-   Render mounts it at `/etc/secrets/seed-cache.b64`.
+   * Filename: `seed-cache.json.gz.b64`
+   * Contents: paste the output of `python3 scripts/export_seed.py`
+     (~8 KB — gzip+base64 rather than raw SQLite, which is ~87 KB)
+   Render mounts it at `/etc/secrets/seed-cache.json.gz.b64`.
 3. **Environment variables:**
 
    | Key | Value |
@@ -120,7 +121,7 @@ repository.
    | `JSESSIONID` | `ajax:...` (secret) |
    | `API_KEY` | `demo-key` |
    | `CACHE_PATH` | `/data/cache.db` |
-   | `SEED_CACHE_B64_FILE` | `/etc/secrets/seed-cache.b64` |
+   | `SEED_CACHE_FILE` | `/etc/secrets/seed-cache.json.gz.b64` |
    | `CACHE_TTL_SECONDS` | `2592000` |
    | `RATE_LIMIT_PER_MIN` | `3` |
    | `DAILY_LIVE_FETCH_BUDGET` | `20` |

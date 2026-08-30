@@ -140,6 +140,40 @@ class ProfileCache:
             "ttl_seconds": self.ttl_seconds,
         }
 
+    def load_seed(self, path: str) -> int:
+        """Import a JSON seed exported by scripts/export_seed.py.
+
+        Hosts that build from git cannot see a local seed file, so the seed
+        arrives as dashboard-managed secret file content instead. Accepts either
+        plain JSON or gzip+base64, which is roughly a quarter the size and the
+        difference between a comfortable paste and an awkward one.
+
+        Existing entries are never overwritten: a live-fetched profile is always
+        fresher than a seed.
+        """
+        import base64
+        import gzip
+
+        source = Path(path)
+        if not source.exists():
+            return 0
+
+        try:
+            text = source.read_text().strip()
+            if not text.startswith("{"):
+                text = gzip.decompress(base64.b64decode(text)).decode()
+            seed = json.loads(text)
+        except Exception as exc:  # noqa: BLE001 - a bad seed must not stop boot
+            log.warning("could not read seed %s: %s", path, exc)
+            return 0
+
+        loaded = 0
+        for public_id, payload in seed.items():
+            if self.get(public_id, allow_stale=True) is None:
+                self.put(public_id, payload)
+                loaded += 1
+        return loaded
+
     def close(self) -> None:
         with self._lock:
             self._conn.close()

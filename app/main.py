@@ -65,6 +65,13 @@ app = FastAPI(
 )
 
 cache = ProfileCache(settings.cache_path, settings.cache_ttl_seconds)
+
+# A host that builds from git cannot see a local seed, so it arrives as secret
+# file content instead. Without this an expired session means an empty demo.
+if settings.seed_file:
+    _loaded = cache.load_seed(settings.seed_file)
+    if _loaded:
+        log.info("loaded %s profiles from seed %s", _loaded, settings.seed_file)
 budget = DailyBudget(settings.cache_path, settings.daily_live_fetch_budget)
 client = LinkedInClient(settings)
 
