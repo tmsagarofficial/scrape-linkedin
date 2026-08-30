@@ -29,6 +29,28 @@ It returns **410 Gone**:
 semantic for *this resource has been permanently removed on purpose*, and it is
 what the server chose to send to a request carrying a valid session.
 
+**Scope of that claim, and why no citation is possible.** It was reproduced
+twice, 37 bytes both times, and in the same run with the same cookie the Dash
+endpoint and the SDUI screen both returned 200, so the session was good and the
+410 was specific to this resource.
+
+There is no external source to cite. LinkedIn does not publish Voyager
+documentation, so there is no changelog, no deprecation notice and no status
+page entry for any of it. Searching turns up the older Python wrappers, which
+still document `profileView` as the endpoint to use, and none of them note that
+it stopped working. The absence of a citation here is a property of an
+undocumented private API, not a gap in the investigation.
+
+So the evidence is: our own reproduction, twice; the browser never calling it
+across eight captures; and two other independent implementations of this same
+challenge reporting the same 410. That is corroboration rather than proof, on
+one profile and one account.
+
+**And it does not mean Voyager is gone.** `identity/dash/profiles` answers 200
+today, which is what most other implementations build on. Exactly one resource
+under `/voyager/` was found dead. Conflating the two would be the same error as
+§20, in the other direction.
+
 Two independent signals agree:
 
 | Check | Result |

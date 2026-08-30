@@ -41,8 +41,65 @@ from app.linkedin.client import (
 )
 from app.linkedin.urls import InvalidProfileURL, public_id_from_url
 from app.normalize.mapper import build_profile
+from app.schemas import ProfileResponse
 
 log = logging.getLogger(__name__)
+
+
+def _error(description: str, example: dict) -> dict:
+    """One documented error response for the OpenAPI schema."""
+    return {
+        "description": description,
+        "content": {"application/json": {"example": example}},
+    }
+
+
+#: Documented responses for the profile endpoints.
+#:
+#: The handlers return JSONResponse directly, because the status code depends on
+#: what actually happened (200 or 206) and `_meta` is assembled after the model
+#: is built. FastAPI cannot infer a schema from that, so without this block
+#: `/docs` shows the endpoints with an untyped response body, which is close to
+#: useless for anyone deciding whether to call it.
+#:
+#: Declaring them here documents without touching runtime behaviour.
+PROFILE_RESPONSES: dict = {
+    200: {"model": ProfileResponse, "description": "Profile found."},
+    206: {
+        "model": ProfileResponse,
+        "description": (
+            "Partial. Some sections could not be fetched; `_meta.warnings` says "
+            "which, and `_meta.partial_fields` lists them."
+        ),
+    },
+    400: _error(
+        "Not a LinkedIn member profile URL. Company, school and job URLs are "
+        "rejected here rather than spending an upstream request on them.",
+        {"detail": {"error": "invalid_url",
+                    "message": "not a member profile URL (looks like a 'company' page)"}},
+    ),
+    401: _error(
+        "Missing or invalid X-API-Key. In demo mode the body names the key.",
+        {"detail": {"error": "unauthorized", "demo_api_key": "demo-key"}},
+    ),
+    403: _error(
+        "The profile exists but is not visible to the authenticated session.",
+        {"error": "ProfileNotVisible", "message": "not visible to this session"},
+    ),
+    404: _error("No such profile.",
+                {"error": "ProfileNotFound", "message": "no such profile: ghost"}),
+    429: _error(
+        "Rate limited, or the daily live-fetch budget is spent. Cached profiles "
+        "still work. Honour Retry-After.",
+        {"detail": {"error": "daily_budget_exhausted",
+                    "message": "This demo makes at most 20 live fetches a day..."}},
+    ),
+    503: _error(
+        "Upstream blocked or the session expired, and nothing cached to fall "
+        "back on. Never a bare 500 and never a 200 full of nulls.",
+        {"error": "SessionExpired", "message": "LinkedIn session is expired or absent"},
+    ),
+}
 
 app = FastAPI(
     title="LinkedIn Profile API",
@@ -72,6 +129,7 @@ if settings.seed_file:
     _loaded = cache.load_seed(settings.seed_file)
     if _loaded:
         log.info("loaded %s profiles from seed %s", _loaded, settings.seed_file)
+
 budget = DailyBudget(settings.cache_path, settings.daily_live_fetch_budget)
 client = LinkedInClient(settings)
 
@@ -404,7 +462,17 @@ def delete_cached(public_id: str) -> JSONResponse:
     )
 
 
-@app.api_route("/health", methods=["GET", "HEAD"], tags=["meta"])
+@app.head("/health", include_in_schema=False)
+def health_head() -> dict[str, Any]:
+    """HEAD variant for platform health probes.
+
+    Hidden from the schema: it is the same resource as GET, and listing both
+    produces a duplicate operation id that OpenAPI tooling complains about.
+    """
+    return health()
+
+
+@app.get("/health", tags=["meta"], summary="Liveness, session state and budget")
 def health() -> dict[str, Any]:
     """Liveness, session validity and cache stats.
 
@@ -428,7 +496,13 @@ def health() -> dict[str, Any]:
     }
 
 
-@app.get("/v1/profile", tags=["profile"], dependencies=[Depends(require_api_key)])
+@app.get(
+    "/v1/profile",
+    tags=["profile"],
+    dependencies=[Depends(require_api_key)],
+    responses=PROFILE_RESPONSES,
+    summary="Fetch a profile by URL",
+)
 def get_profile_by_url(
     url: Annotated[str, Query(description="A linkedin.com/in/... profile URL")],
     refresh: Annotated[bool, Query(description="Bypass the cache")] = False,
@@ -456,7 +530,11 @@ def get_profile_by_url(
 
 
 @app.get(
-    "/v1/profile/{public_id}", tags=["profile"], dependencies=[Depends(require_api_key)]
+    "/v1/profile/{public_id}",
+    tags=["profile"],
+    dependencies=[Depends(require_api_key)],
+    responses=PROFILE_RESPONSES,
+    summary="Fetch a profile by vanity slug",
 )
 def get_profile_by_id(
     public_id: str,

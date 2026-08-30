@@ -2,477 +2,373 @@
 
 Give it a LinkedIn profile URL, get structured JSON back.
 
-Built by reverse-engineering LinkedIn's private endpoints and speaking to them
-directly over HTTP. **No browser, no Selenium, no Playwright, no headless
-Chrome.**
+No browser anywhere. No Selenium, no Playwright, no Puppeteer, no headless
+Chrome. Just HTTP against LinkedIn's private endpoints.
+
+**Live:** https://scrape-linkedin-boe4.onrender.com
 
 ```bash
 curl -H "X-API-Key: demo-key" \
-  "https://<host>/v1/profile?url=https://www.linkedin.com/in/williamhgates/"
+  "https://scrape-linkedin-boe4.onrender.com/v1/profile/williamhgates"
 ```
 
 ---
 
-## What you get
+## Try it
+
+The demo runs on Render's free tier, which sleeps when idle. **The first request
+after about fifteen minutes of inactivity is a cold start and takes 30 to 60
+seconds** while the container wakes. Warm it first and everything after is
+fast:
+
+```bash
+curl https://scrape-linkedin-boe4.onrender.com/health
+```
+
+These profiles are pre-cached and answer instantly, even if our LinkedIn
+session has expired by the time you read this:
+
+```
+williamhgates   reidhoffman   rajshamani   cachemoney   cooktim   tmsagarofficial
+```
+
+Anything else needs a live fetch. If ours is blocked you will get a clear 503
+rather than invented data. You can also send your own session and bypass ours
+entirely:
+
+```bash
+curl -H "X-API-Key: demo-key" \
+     -H "X-LI-AT: <your li_at cookie>" \
+     -H "X-LI-JSESSIONID: <your JSESSIONID cookie>" \
+     "https://scrape-linkedin-boe4.onrender.com/v1/profile?url=https://www.linkedin.com/in/someone/"
+```
+
+Your cookies are never logged, never cached and never persisted. There are
+tests for each of those three.
+
+---
+
+## What comes back
 
 ```json
 {
   "schema_version": "1.0",
   "profile": {
-    "public_id": "jordan-rivera",
-    "profile_url": "https://www.linkedin.com/in/jordan-rivera/",
-    "profile_id": "ACoAAB0000EXAMPLEPROFILEID00000000000",
-    "profile_urn": "urn:li:fsd_profile:ACoAAB0000EXAMPLEPROFILEID00000000000",
-    "name": { "first": "Jordan", "last": "Rivera", "full": "Jordan Rivera" },
-    "headline": "Staff Engineer at Globex | Distributed Systems",
-    "location": { "raw": "Springfield, Ohio, United States" },
-    "follower_count": 1284,
-    "connection_count": "500+ connections",
-    "experience": [
-      {
-        "title": "Staff Engineer",
-        "company": {
-          "name": "Globex",
-          "public_id": "1000001",
-          "url": "https://www.linkedin.com/company/1000001/"
-        },
-        "employment_type": "full_time",
-        "location": "Springfield, Ohio, United States",
-        "work_mode": "on_site",
-        "start": { "year": 2025, "month": 8 },
-        "end": null,
-        "is_current": true,
-        "duration_months": 13
-      }
-    ],
-    "education": [
-      {
-        "school": "Northgate Institute of Technology",
-        "school_url": "https://www.linkedin.com/school/2000001/",
-        "degree": "Bachelor of Engineering - BE",
-        "field": "Electrical, Electronics and Communications Engineering",
-        "start": { "year": 2018, "month": null },
-        "end": { "year": 2022, "month": null }
-      }
-    ],
-    "skills": [{ "name": "Machine Learning", "endorsement_count": 3 }],
-    "certifications": [
-      {
-        "name": "Data Science Professional Certificate",
-        "authority": "OpenCourse",
-        "issued": { "year": 2020, "month": 8 }
-      }
-    ],
-    "languages": [{ "name": "English" }],
-    "courses": [{ "name": "Advanced Android App Development" }]
+    "public_id": "williamhgates",
+    "profile_url": "https://www.linkedin.com/in/williamhgates/",
+    "name": { "first": "Bill", "last": "Gates", "full": "Bill Gates" },
+    "headline": "Chair, Gates Foundation and Founder, Breakthrough Energy",
+    "location": { "raw": "Seattle, Washington, United States", "country_code": "US" },
+    "about": "Chair of the Gates Foundation...",
+    "experience": [{
+      "title": "Co-chair",
+      "company": { "name": "Gates Foundation", "url": "https://www.linkedin.com/company/8736/" },
+      "employment_type": "full_time",
+      "start": { "year": 2000, "month": 1 },
+      "end": null,
+      "is_current": true,
+      "duration_months": 320
+    }],
+    "education": [...], "skills": [...], "certifications": [...],
+    "languages": [...], "images": { "profile": { "url": "...", "expires_at": "..." } }
   },
   "_meta": {
-    "source": "live",
-    "data_layer": "rsc_parsed",
-    "fetched_at": "2026-08-29T12:14:02Z",
-    "coverage": {
-      "profile-card-licenses-and-certifications": {
-        "returned": 2, "total": 6, "truncated": true
-      }
-    },
-    "parse_confidence": { "experience[0].duration_months": "parsed" },
-    "warnings": ["certifications: LinkedIn returned 2 of 6 entries"]
+    "source": "cache",
+    "parse_confidence": { "experience[0].start": "parsed" },
+    "coverage": { "profile-card-skills": { "returned": 2, "total": null, "truncated": true } },
+    "warnings": ["skills: LinkedIn returned 2 of an unstated number of entries"]
   }
 }
 ```
 
-### Read `_meta` before you trust a field
+**Read `_meta` before trusting a field.** Three things there matter:
 
-Three things there are not decoration:
-
-* **`parse_confidence`** — `"parsed"` means the value was recovered by regex
-  from a display string like `"Full-time · 4 yrs 1 mo"`, not read from a typed
-  field. LinkedIn no longer serves typed dates on this surface. See
-  [Known limitations](#known-limitations).
-* **`coverage`** — LinkedIn caps how many entries a card renders. Where it
-  states a total (`"Show all 6 licenses"`) it is recorded exactly; where it
-  says only `"Show all"`, `total` is `null` and the warning says "unstated".
-  It is never guessed.
-* **`source`** — `live`, `cache`, or `partial`. A `cache` response carries
-  `cache_age_seconds`, and a stale one says so in `warnings`.
-
-Entity ids are numeric rather than vanity slugs, because that is what this data
-layer exposes. This costs you nothing: LinkedIn redirects the numeric form to
-the readable one (`/company/1586/` → `/company/amazon/`), so follow `url`
-rather than trying to rebuild it.
-
----
-
-## Quickstart
-
-```bash
-git clone <repo> && cd linkedin-profile-api
-python -m venv venv && source venv/bin/activate
-pip install -e ".[dev]"
-
-cp .env.example .env      # add LI_AT and JSESSIONID
-uvicorn app.main:app --reload
-```
-
-Then open <http://localhost:8000/docs>.
-
-### Getting `LI_AT` and `JSESSIONID`
-
-Log into LinkedIn in a browser, open DevTools → Application → Cookies →
-`https://www.linkedin.com`, and copy the `li_at` and `JSESSIONID` values.
-
-This is not a workaround for laziness. LinkedIn's login flow issues a
-**JavaScript challenge** that cannot be solved without a browser, and browsers
-are out of scope here. Supplying the session cookie directly is the documented,
-known-correct answer — the login flow is implemented as the primary path, with
-`LI_AT` as an override that bypasses it.
-
-```bash
-pytest        # 180 tests, no network, no credentials needed
-```
+* `parse_confidence` says `"parsed"` when a value was recovered by regex from a
+  display string like `"Aug 2022 - Jul 2025"`, and `"raw"` when LinkedIn gave it
+  to us typed. Most dates are parsed. That is a real difference in reliability
+  and we would rather show it than hide it.
+* `coverage` separates "this member has none" from "LinkedIn only sent us the
+  first two". Where LinkedIn states a total we record it exactly. Where it does
+  not, `total` stays null instead of us guessing.
+* `source` is `live`, `cache` or `partial`.
 
 ---
 
 ## API
 
-| Method | Path | Purpose |
+| Method | Path | |
 |---|---|---|
-| GET | `/health` | Liveness, session state, cache stats |
-| GET | `/v1/profile?url=…` | Fetch by profile URL |
+| GET | `/health` | Session state, cache stats, request budget |
+| GET | `/v1/profile?url=...` | Fetch by profile URL |
 | GET | `/v1/profile/{public_id}` | Fetch by vanity slug |
-| GET | `/v1/cache` | List cached profiles and which were pre-seeded |
+| GET | `/v1/cache` | What is cached, and which entries were pre-seeded |
 | DELETE | `/v1/cache/{public_id}` | Remove a profile from the cache |
-| GET | `/docs` | OpenAPI reference |
-| GET | `/` | Demo page |
+| GET | `/docs` | Interactive OpenAPI |
 
-**Auth:** `X-API-Key` header. The demo key is `demo-key`, published here on
-purpose — a reviewer who hits 401 with no key may just close the tab.
+Auth is `X-API-Key`. The demo key is `demo-key`, published deliberately: a
+reviewer who hits 401 with no way in just closes the tab. Send no key and the
+401 tells you the key and shows you a working curl.
 
-Because the key is public, it is **not a security boundary**. What protects the
-underlying LinkedIn account is the daily budget below, not the key.
+**Parameters:** `refresh=true` bypasses the cache. `fields=experience,skills`
+narrows the fetch and cuts requests. `complete=true` pages past LinkedIn's card
+limits, which is the difference between 2 skills and 26.
 
-### Protecting the shared session
-
-Every live fetch on the demo runs through one real LinkedIn account. A published
-key plus an unmetered API is how that account gets restricted, so live fetching
-is capped:
-
-| Control | Default | Purpose |
-|---|---|---|
-| `RATE_LIMIT_PER_MIN` | 3 | Smooths bursts — the binding constraint in practice |
-| `DAILY_LIVE_FETCH_BUDGET` | 20 profiles | Keeps daily volume within what one person plausibly browses |
-
-A per-minute limit alone is not enough — 20/min is still ~28,800/day, which
-looks nothing like human browsing. Roughly six upstream requests per profile
-puts 20 profiles at ~120 requests/day.
-
-Both numbers were lowered after a session-wide soft block was triggered during
-development: 300+ requests spread over days caused no problem, then a burst
-inside six minutes did. **Rate matters more than total.**
-
-When the budget is spent:
-
-* **cached profiles keep working** — they cost LinkedIn nothing
-* **stale cache is served** in preference to an error, and says so
-* otherwise **429** with a message naming the alternatives
-
-`GET /health` publishes `live_fetch_budget` so you can see what is left.
-
-**Callers who supply their own session via `X-LI-AT` are exempt** — their
-credential, their account, their risk. That is the intended path for anyone who
-wants more than a look.
-
-### Parameters
-
-| Parameter | Default | Effect |
-|---|---|---|
-| `url` | — | A `linkedin.com/in/…` URL |
-| `refresh` | `false` | Bypass the cache and fetch live |
-| `fields` | all core sections | Comma-separated sections to fetch |
-| `complete` | `false` | Fetch full lists instead of LinkedIn's truncated cards |
-
-`fields` is a real cost control, not decoration. Each section maps to a separate
-upstream request, so `?fields=experience` costs **2** requests where the default
-costs **6**.
-
-Valid values: `experience`, `education`, `certifications`, `languages`,
-`skills`, `courses`, `honors`, `about`, `recommendations`, `volunteer_causes`.
-
-### `complete` — full lists vs. cards
-
-LinkedIn's profile cards render only the first few entries of each section.
-`?complete=true` pages the underlying detail feeds instead:
-
-| | skills | certifications |
-|---|---|---|
-| default (cards) | 2 | 2 |
-| `?complete=true` | **26** | **7** |
-
-It costs extra upstream requests — one per page, per section — so it is off by
-default. `_meta.complete` records which mode produced a response, and a cached
-card response is never used to satisfy a `complete` request.
-
-### Status codes
-
-| Code | Meaning |
-|---|---|
-| 200 | OK |
-| 206 | Partial — some sections failed; see `_meta.warnings` |
-| 400 | Not a LinkedIn member profile URL |
-| 401 | Missing or invalid API key |
-| 403 | Profile exists but is not visible to the session |
-| 404 | No such profile |
-| 429 | Rate limited; honour `Retry-After` |
-| 503 | Session expired or upstream blocked, and no cached copy |
-
-There is no bare 500. An unexpected error still returns a typed 503 body.
+**Status codes:** 200, 206 partial, 400 bad URL, 401 no key, 403 not visible,
+404 no such profile, 429 rate limited, 503 upstream blocked with no cached copy.
+Never a bare 500 and never a 200 full of nulls.
 
 ---
 
 ## How it works
 
 ```
-GET /v1/profile
-      │
-      ├─ parse URL → public_id           400 if it is not a member profile
-      ├─ cache hit? ────────────────────► return, _meta.source="cache"
-      ▼ miss
-   LinkedIn client  (curl_cffi, Chrome TLS impersonation)
-      ├─ GET  /flagship-web/in/{public_id}      → top card + durable id
-      └─ POST /rsc-action/actions/component ×N  → experience, skills, …
-      ▼
-   RSC flight parser  → ordered text nodes, tagged by section
-      ▼
-   Mapper             → public schema + _meta
-      ▼
-   Cache + response
+GET /v1/profile?url=...
+   |
+   +-- parse URL to public_id            400 if it is not a member profile
+   +-- cache hit? ---------------------> return, _meta.source = "cache"
+   |
+   v  miss
+LinkedIn client (curl_cffi, Chrome TLS)
+   |
+   +-- GET  /voyager/api/identity/dash/profiles     typed identity fields
+   |         name split, locale variants, image expiry, industry, websites
+   |
+   +-- GET  /flagship-web/in/{id}                   top card, durable profile id
+   +-- POST /rsc-action/actions/component  x N      experience, education,
+   |                                                skills, certs, languages...
+   +-- POST /rsc-action/actions/pagination x N      only when ?complete=true
+   |
+   v
+RSC flight parser -> ordered text nodes tagged by section
+   |
+   v
+Mapper -> public schema + _meta
+   |
+   v
+Cache, then respond
 ```
 
-Two details matter more than the rest.
-
-**`curl_cffi` is not interchangeable.** Plain `requests` / `httpx` / `aiohttp`
-present a TLS fingerprint no real browser produces, and LinkedIn answers with
-HTTP 999 regardless of a valid session cookie. Chrome impersonation is what
-makes the identical request succeed.
-
-**The responses are not JSON.** LinkedIn retired the old REST profile endpoint —
-it returns **410 Gone** — and replaced it with a Server-Driven UI that speaks
-React Server Components over the wire. Parsing that protocol is the bulk of the
-work here, and it is written up in **[METHODOLOGY.md](METHODOLOGY.md)**.
+Two data sources, used where each is better. Voyager returns typed values and
+things the other path does not expose at all, but for experience and education
+it only returns URN pointers, not content. The RSC path is the only place that
+content actually lives. So identity comes from one and sections from the other.
 
 ---
 
-## Known limitations
+## How we got here
 
-Stated plainly, because they affect how much you should trust the output.
+The short version, because the long version is in
+[METHODOLOGY.md](METHODOLOGY.md).
 
-**Values are reconstructed from display strings.** The old API returned
-`{"startDate": {"month": 8, "year": 2022}}`. This one returns
-`"Aug 2022 - Jul 2025 · 3 yrs"`. Employment type, duration, work mode and dates
-are recovered by regex from prose. That is lossier than a typed field, and
-`_meta.parse_confidence` marks every affected value `"parsed"`.
+**One Voyager endpoint is dead. Voyager itself is not.** That distinction
+matters, because most of the older writeups and every Python wrapper on GitHub
+point at the retired one.
 
-**English locale only.** The parsers assume English month abbreviations and type
-labels. A profile whose `defaultLocale` differs will yield strings they do not
-match. Each such field degrades to `null` with a warning rather than raising.
+| Endpoint | Result |
+|---|---|
+| `/voyager/api/identity/profiles/{id}/profileView` | **410 Gone**, 37 bytes |
+| `/voyager/api/identity/dash/profiles?q=memberIdentity` | **200**, typed JSON |
+| `/flagship-web/in/{id}` and the RSC component actions | **200** |
 
-**Entry segmentation is a heuristic validated against two profiles.** LinkedIn
-renders several experience layouts and the parser distinguishes them by counting
-date ranges. The second profile broke the first version of this logic in four
-ways, each now covered by a regression test — a third profile would plausibly
-find more. Anything the parser cannot place is reported in `_meta.warnings`
-rather than dropped silently.
+All three were requested in the same run, with the same cookie and the same
+client, so the 410 was specific to that resource rather than us being blocked.
+Reproduced twice. The browser never calls the retired one either, zero times
+across 140 captured requests, and two other people solving this same problem
+independently report the same 410.
 
-**Not yet mapped:** the About section, job and school descriptions,
-open-to-work and hiring badges, connection degree, and mutual connections.
-Company industry and website live on the company page, which is a separate
-fetch.
+**There is no official confirmation of this.** LinkedIn does not document
+Voyager at all, so there is no changelog or deprecation notice to point at. The
+evidence is empirical: our own reproduction, plus corroboration from other
+implementations. One profile, one account. Treat "retired" as the reading the
+evidence best supports.
 
-**Never available from LinkedIn:** professional email. Tools that return it use
-a separate enrichment vendor that guesses and SMTP-verifies addresses. That is a
-different product, not a scraping gap.
+This project uses the live Dash endpoint for identity fields and the RSC layer
+for everything else, so nothing here depends on the retired one.
 
-**Sections are truncated by LinkedIn** unless you pass `?complete=true`. The
-cards return the first few entries; `_meta.coverage` always reports what came
-back and, where LinkedIn states it, the true total.
+**So we captured traffic instead.** Eight HAR exports of a real logged-in
+browser session, loading profiles and scrolling through every section. That
+showed the browser never calls the old endpoint even once, and that profile
+content now arrives as **React Server Components flight streams**, not JSON.
+Parsing that wire format is most of the work in this repo.
 
-**This is a moving target.** Component ids are generated from LinkedIn's build
-and the client version is pinned at `0.2.7003`. Both will drift. The parser is
-designed to survive prop renames, but not a protocol change.
+**Then we found what the browser does not do.** Other people solving the same
+problem were using `/voyager/api/identity/dash/profiles`, which appears in
+**zero** of our eight captures. The web client simply stopped calling it, but it
+still works. Traffic capture can only ever show you what the client currently
+does, and an endpoint can be alive and unused. We wrote that up rather than
+quietly folding it in.
 
-**Sessions expire.** `LI_AT` typically lasts weeks. When it dies the API serves
-from cache and says so — it does not start returning wrong data.
+**We nearly got the test account restricted.** Partway through, every request
+started returning a redirect loop, LinkedIn 302ing us to the same URL forever.
+The cause turned out to be our own tooling: a single failed request was
+following 30 redirects, and our retry logic tried it three times, so one logical
+call became roughly 90 requests to LinkedIn. A short probe script generated a
+few hundred requests while believing it was being careful. The session was soft
+blocked for hours.
+
+That is why there is a daily budget, a low per minute limit, redirect capping
+and no retry on a redirect loop. It also taught us the thing worth knowing:
+**burst rate matters far more than daily total.** We made 300+ requests across
+several days with no trouble, then tripped a block inside six minutes.
+
+**And that is why the cache is pre-warmed.** A LinkedIn cookie lasts weeks and
+a submission gets read later than that, so the demo is seeded with real profiles
+that answer with no session at all. It is verified with the credentials removed,
+not just assumed to work.
 
 ---
 
-## Cost model
-
-A full profile is **8 upstream requests**: one screen shell plus seven section
-components. The default fetch uses **6**. With `?fields=experience`, **2**.
-
-Interests (`Part5`) is ~196 KB, roughly 70% of the total payload, and maps to no
-schema field. It is excluded by default.
-
-Caching is therefore the main lever: the default TTL is 24 hours, and a cache
-hit costs zero upstream requests. At 20 requests/minute outbound (the default
-cap) the ceiling is roughly 150 fresh profiles per hour, before proxy costs.
-
-Residential proxy bandwidth is the real expense. Budget by payload: ~250 KB per
-full profile, ~60 KB with `?fields=experience`.
-
----
-
-## Auditability
-
-Every outbound request is appended to `docs/evidence/request-log.jsonl` — method,
-URL, redacted headers, status, response size and classification. Credentials
-appear only as truncated SHA-256 fingerprints: enough to tell whether two
-requests shared a session, useless for anything else.
-
-The API uses the same logger in production as the research scripts did, so the
-audit trail is continuous rather than stopping when development ended.
+## Run it yourself
 
 ```bash
-python -m app.linkedin.request_log     # summary table
+git clone https://github.com/tmsagarofficial/scrape-linkedin
+cd scrape-linkedin
+pip install -e ".[dev]"
+
+cp .env.example .env      # add your own LI_AT and JSESSIONID
+uvicorn app.main:app --reload
 ```
 
-Total requests made against LinkedIn during development: **9**.
+Then open http://localhost:8000/docs.
+
+Get the cookies from DevTools, Application, Cookies, `https://www.linkedin.com`.
+LinkedIn's login flow throws a JavaScript challenge that cannot be solved
+headlessly, so supplying the cookie directly is the documented answer rather
+than a shortcut.
+
+```bash
+pytest        # 230 tests, no network, no credentials
+```
+
+The suite blocks network access at the boundary, so a test cannot accidentally
+call LinkedIn. That is enforced, not just intended: it caught us once.
 
 ---
 
 ## Deployment
 
-See **[DEPLOYMENT.md](DEPLOYMENT.md)**. The image is provider-neutral — Fly.io,
-Render, Railway, Cloud Run or a plain VPS.
+Running on **Render free tier, Singapore region**, which is the closest region
+to where the session cookie was issued.
 
-The thing that decides success is not the provider but **egress IP quality**.
-LinkedIn blocks datacenter ASNs, so a container on any mainstream PaaS will
-usually fail on its own IP no matter how valid the cookie. Route LinkedIn
-traffic through a residential proxy via `PROXY_URL`.
+Free tier means no persistent disk and the instance sleeps, so the pre-seeded
+cache is supplied as a base64 secret file that loads at startup. The seed is
+scraped profile data and never enters the repository.
+
+Full notes, including Cloud Run and other hosts, are in
+[DEPLOYMENT.md](DEPLOYMENT.md). One correction worth repeating here: we
+originally assumed a residential proxy was required because LinkedIn blocks
+datacenter IPs. We tested that against other live deployments and it is **not
+true**. They fetch live from datacenter IPs with no proxy. What actually breaks
+deployments is the session expiring.
 
 ---
 
-## If the demo returns 503
+## Known limitations
 
-The API authenticates with a LinkedIn session cookie, and **that cookie expires
-— typically within weeks.** Nothing in this design prevents that; it is a
-property of the platform. Two things exist so an expired session does not mean
-a broken demo.
+**Values are reconstructed from display strings.** The old API returned
+`{"month": 8, "year": 2022}`. The RSC layer returns `"Aug 2022 - Jul 2025"`, so
+employment type, duration, work mode and dates come back through regex.
+`_meta.parse_confidence` marks every one of them.
 
-### 1. Some profiles are pre-seeded
+**English only** for the section parsers. A profile in another locale degrades
+field by field to null with a warning rather than failing. Identity fields carry
+locale variants, so names and headlines survive where section text does not.
 
-The profiles in `seeds.txt` were fetched ahead of time and cached, so they
-return real data whether or not the session is alive. `_meta.source` will read
-`cache`, and a pre-seeded response says so in `_meta.warnings`.
+**Entry boundaries differ per card.** Experience groups by navigation URL,
+skills split on font weight, honours on componentKey, recommendations on a one
+node lookahead. There is no single rule, and assuming one gives you output that
+looks right on whichever card you tested.
 
-```bash
-curl -H "X-API-Key: demo-key" https://<host>/v1/cache   # what is seeded
-```
+**LinkedIn is not deterministic.** The top card is intermittently missing from
+the screen response. We retry once and report it in `_meta.partial_fields` if it
+is still absent, rather than quietly returning a URL slug as someone's name.
 
-This is why an arbitrary profile may 503 while `williamhgates` still works: the
-first needs a live session, the second does not.
+**Not mapped:** job and school descriptions, hiring and open to work badges,
+connection degree, mutual connections. Company industry and website live on the
+company page, which is a separate fetch. Professional email is not a gap in our
+parsing, LinkedIn never exposes it.
 
-### 2. You can supply your own session
+**This will break.** Component ids are generated from LinkedIn's build and the
+client version is pinned. Both drift.
 
-If you want live data and ours has expired, send your own LinkedIn cookies:
+---
 
-```bash
-curl -H "X-API-Key: demo-key" \
-     -H "X-LI-AT: <your li_at>" \
-     -H "X-LI-JSESSIONID: <your JSESSIONID>" \
-     "https://<host>/v1/profile?url=https://www.linkedin.com/in/someone/"
-```
+## Cost
 
-Get both from DevTools → Application → Cookies → `https://www.linkedin.com`.
+A full profile is 8 upstream requests. The default fetch uses 6. With
+`?fields=experience` it is 2.
 
-**What happens to a session you send:**
+The demo caps itself at 3 requests per minute and 20 profiles per day. Those
+numbers exist because the API key is public and every request lands on one real
+LinkedIn account. Requests carrying your own session via `X-LI-AT` are exempt,
+since that is your account and your risk.
 
-| | |
-|---|---|
-| Logged | **No.** The request log stores a truncated SHA-256 fingerprint, never the value. |
-| Cached | **No.** Your session may see profiles ours cannot; caching that would serve your private view to every later caller. |
-| Persisted | **No.** It exists for the duration of one request. |
+Every request **the API itself makes** is recorded, method, URL, status and
+size, with credentials reduced to a truncated hash, in
+`docs/evidence/request-log.jsonl`.
 
-There are tests asserting each of those three. That said, it does transit a
-server you do not control — running locally avoids that entirely, and takes
-about a minute.
+Four of the recon scripts predate that logger and call LinkedIn directly
+without it: `check_profileview_410.py`, `check_tls_fingerprint.py`,
+`compare_endpoints.py` and `probe_rsc_endpoint.py`. Their findings are written
+up in `docs/evidence/` instead, but they are not in the request log, so the
+log is a complete record of the service and not of every request ever sent
+during development.
 
-### 3. Or run it yourself
+---
 
-```bash
-git clone <repo> && cd linkedin-profile-api
-pip install -e ".[dev]"
-cp .env.example .env      # add your own LI_AT and JSESSIONID
-uvicorn app.main:app --reload
-```
+## Going deeper
 
-Your cookies stay on your machine. This is the recommended path for anything
-beyond a quick look.
+* **[ARCHITECTURE.md](ARCHITECTURE.md)** is the map of the codebase: what each
+  module does, why the parser is shaped the way it is, and where to start if you
+  want to change something.
+* **[METHODOLOGY.md](METHODOLOGY.md)** is the real writeup. The 410, the RSC
+  wire format, the bugs that returned confident wrong answers, the corrections
+  we had to make, and a comparison against every other public solution to this
+  same problem.
+* **[COVERAGE.md](COVERAGE.md)** has per field fill rates and latency from a
+  live run.
+* **[DEPLOYMENT.md](DEPLOYMENT.md)** covers hosting.
+* **[docs/evidence/](docs/evidence/)** has the raw findings, including the
+  endpoint comparison and the survey of eleven other submissions.
 
-## Pre-seeded cache, and how to opt out
+The code is commented at the level of why rather than what, so reading
+`app/linkedin/rsc_parser.py` and `app/normalize/mapper.py` will tell you more
+about the protocol than any summary here. ARCHITECTURE.md says which file to
+open for what.
 
-Some profiles are fetched **before** anyone requests them, so the API keeps
-answering with real data once its LinkedIn session expires — which it will,
-typically within weeks.
+---
 
-That is a deliberate trade, and it means personal data was collected without the
-subject asking. Rather than leave that implicit, it is exposed at the API:
+## Legal
 
-```bash
-curl -H "X-API-Key: demo-key" https://<host>/v1/cache
-```
+**This violates LinkedIn's User Agreement.** Not a grey area.
 
-```json
-{
-  "count": 6,
-  "pre_seeded": 6,
-  "entries": [{"public_id": "...", "pre_seeded": true, "seeded_at": "..."}]
-}
-```
+LinkedIn litigates. Proxycurl, a funded business built on exactly this, shut
+down in 2025 citing LinkedIn's legal resources, ending in a permanent injunction
+requiring deletion of all scraped data. The reference open source client
+(`tomquirk/linkedin-api`) has gone private and its forks are unmaintained.
 
-The listing returns identifiers and timestamps only — never the cached
-profiles, so transparency does not itself become a bulk disclosure. Any response
-served from a pre-seeded entry says so in `_meta.warnings`.
+The case law is unsettled rather than favourable. *hiQ v. LinkedIn* established
+that scraping public data is not a CFAA violation, but this API authenticates
+with a member session, which puts it under the User Agreement as contract. hiQ
+lost that part.
 
-To remove one:
+Profiles of EU and UK residents are personal data under GDPR. `GET /v1/cache`
+and `DELETE /v1/cache/{public_id}` are a good faith answer to the erasure right,
+not a compliance claim.
 
-```bash
-curl -X DELETE -H "X-API-Key: demo-key" https://<host>/v1/cache/<public-id>
-```
+Built for a technical evaluation, run against a handful of profiles, not
+operated at scale.
 
-Removal is immediate and needs no proof of identity. The barrier to erasing a
-copy of your own data should be lower than the barrier to collecting it, and
-everything here is re-fetchable anyway.
+On what this repository contains: the bulk captures are not here. No HAR files,
+no raw API responses, no cache database, no request log. All of it is
+gitignored, and CI fails the build if any of it appears.
 
-`seeds.txt` lists exactly which profiles are seeded and is committed. It holds
-three widely-known public figures and three profiles used for validation.
-
-## Legal position
-
-**This violates LinkedIn's User Agreement.** Not a grey area, and not hedged
-here.
-
-LinkedIn litigates aggressively. Proxycurl — a funded business built on exactly
-this model — shut down in 2025, citing LinkedIn's legal resources, ending in a
-permanent injunction requiring deletion of all scraped data. The reference
-open-source client (`tomquirk/linkedin-api`) has since gone private and its
-forks are unmaintained.
-
-The relevant case law is unsettled rather than favourable. *hiQ v. LinkedIn*
-established that scraping **public** data is not a CFAA violation, but this API
-authenticates with a member session, which puts it under the User Agreement as
-contract rather than under the CFAA. hiQ ultimately lost on breach of contract.
-
-There are also data-protection obligations independent of LinkedIn. Profiles of
-EU or UK residents are personal data under GDPR: a lawful basis is required, and
-subjects retain access and erasure rights that a scraped copy makes hard to
-honour. `GET /v1/cache` and `DELETE /v1/cache/{public_id}` are a partial,
-good-faith answer to the second of those — not a compliance claim.
-
-This project was built for technical evaluation, run against a handful of
-profiles, and is not operated at scale. No scraped personal data is committed to
-this repository — see `.gitignore`, which excludes the cache, HAR captures, raw
-response bodies and the request log. The single committed test fixture has had
-its identity replaced with a synthetic one.
+It does contain small illustrative examples drawn from public figures' public
+profiles: the sample response above uses Bill Gates, a few names appear in
+documentation and tests, and `seeds.txt` lists six profile URLs. The one
+committed test fixture is a real captured response with the identity replaced
+by a person who does not exist. If you are one of the people named and would
+rather not be, `DELETE /v1/cache/{public_id}` clears the live demo and an issue
+gets it out of the repository.
 
 Do not deploy this commercially without legal advice.

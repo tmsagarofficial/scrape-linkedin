@@ -526,6 +526,30 @@ class TestTransparency:
 
 
 class TestDocs:
+    def test_profile_responses_are_documented(self, api):
+        """`/docs` must show what comes back, not just what goes in.
+
+        The handlers return JSONResponse directly, so FastAPI cannot infer a
+        schema and the spec showed an untyped body with only 422 documented.
+        """
+        op = api.get("/openapi.json").json()["paths"]["/v1/profile"]["get"]
+        documented = set(op["responses"])
+        assert {"200", "206", "400", "401", "403", "404", "429", "503"} <= documented
+        ref = op["responses"]["200"]["content"]["application/json"]["schema"]["$ref"]
+        assert ref.endswith("ProfileResponse")
+
+    def test_no_duplicate_operation_ids(self, api):
+        """Two methods on one api_route share an operation id, which breaks
+        client generators."""
+        spec = api.get("/openapi.json").json()
+        ids = [
+            op["operationId"]
+            for path in spec["paths"].values()
+            for op in path.values()
+            if "operationId" in op
+        ]
+        assert len(ids) == len(set(ids)), "duplicate operationId in the spec"
+
     def test_openapi_renders(self, api):
         assert api.get("/docs").status_code == 200
         assert "/v1/profile" in api.get("/openapi.json").json()["paths"]
