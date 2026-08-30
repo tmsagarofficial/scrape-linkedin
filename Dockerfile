@@ -53,13 +53,19 @@ ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
 # costs LinkedIn requests and undermines the stale-if-error fallback.
 ENV CACHE_PATH=/data/cache.db
 
-# Hosts inject PORT; 8080 is the fallback for a plain `docker run`.
-ENV PORT=8080
+# PORT is deliberately not set with ENV.
+#
+# Hosts inject it at runtime and some of them use its presence to decide which
+# port to probe. Declaring a default here made Render route to the wrong place,
+# which showed up as an instance that answered roughly half of all requests and
+# returned `x-render-routing: no-server` for the rest.
+#
+# The CMD still falls back to 8080 so `docker run` works with no PORT set.
 EXPOSE 8080
 
-# /health is cheap by design: it reports session state from configuration and
-# never calls LinkedIn, so a health probe cannot consume the rate limit.
-HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-    CMD python -c "import os,urllib.request as u; u.urlopen(f\"http://127.0.0.1:{os.environ.get('PORT','8080')}/health\").read()"
+# No HEALTHCHECK either. Platforms run their own HTTP health probe against
+# /health, and a container-level check that disagrees with the platform's makes
+# the instance flap: the platform sees it as unhealthy and cycles it, which is
+# indistinguishable from a crash loop from the outside.
 
 CMD ["sh", "-c", "exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8080}"]
