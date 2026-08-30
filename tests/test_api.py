@@ -530,6 +530,17 @@ class TestDocs:
         assert api.get("/docs").status_code == 200
         assert "/v1/profile" in api.get("/openapi.json").json()["paths"]
 
+    def test_head_is_accepted_on_probe_routes(self, api):
+        """Platform health probes use HEAD, not GET.
+
+        Render probes `HEAD /`. A GET-only route answers 405, the platform
+        reads that as unhealthy and cycles the instance — which presents as an
+        service serving roughly half its requests, indistinguishable from a
+        crash loop until you read the access log.
+        """
+        for path in ("/", "/health"):
+            assert api.request("HEAD", path).status_code == 200, path
+
     def test_index_page_renders(self, api):
         response = api.get("/")
         assert response.status_code == 200

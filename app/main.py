@@ -404,7 +404,7 @@ def delete_cached(public_id: str) -> JSONResponse:
     )
 
 
-@app.get("/health", tags=["meta"])
+@app.api_route("/health", methods=["GET", "HEAD"], tags=["meta"])
 def health() -> dict[str, Any]:
     """Liveness, session validity and cache stats.
 
@@ -474,8 +474,19 @@ def get_profile_by_id(
     return _serve(resolved, refresh, fields, complete, session)
 
 
-@app.get("/", response_class=HTMLResponse, include_in_schema=False)
+@app.api_route(
+    "/", methods=["GET", "HEAD"], response_class=HTMLResponse, include_in_schema=False
+)
 def index() -> str:
+    """The demo page.
+
+    HEAD is accepted as well as GET because platform health probes use it.
+    Render probes `HEAD /`, and a GET-only route answers 405 — which the
+    platform reads as unhealthy and cycles the instance. The symptom is an
+    service that serves roughly half of all requests and returns
+    `x-render-routing: no-server` for the rest, which looks like a crash loop
+    but is a routing disagreement.
+    """
     return """<!doctype html>
 <title>LinkedIn Profile API</title>
 <style>
