@@ -1,0 +1,49 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  workflow_dispatch:
+
+# AGENTS.md §8: CI must pass with no credentials and no network. No secrets are
+# referenced anywhere in this workflow, so a fork PR runs it identically.
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Test
+        # No LI_AT, no JSESSIONID, no API_KEY. If a test needs the network or a
+        # credential it fails here, which is the point.
+        run: pytest -v
+
+  secrets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # full history: a secret removed in a later commit
+                           # is still a leak if it is reachable in the log
+
+      - name: Scan working tree and history for credentials
+        run: python scripts/scan_secrets.py --history

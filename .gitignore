@@ -1,0 +1,48 @@
+# Secrets
+.env
+*.pem
+
+# Session captures. HARs contain li_at, JSESSIONID and full profile bodies.
+*.har
+docs/evidence/raw/
+
+# Harvested profile data (AGENTS.md §9 — never commit to a public repo)
+profileView_raw.json
+*.db
+*.sqlite3
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+*.egg-info/
+scripts/scrub_map.local.json
+profile_output*.json
+
+# Audit log records which profiles were fetched (identifying).
+# Commit the redacted summary instead: python3 -m app.linkedin.request_log
+docs/evidence/request-log.jsonl
+demo-cache.db*
+
+# --- Not part of the deliverable ------------------------------------------
+# The client's own brief and planning documents. They are their materials, not
+# this project's source, and a public repo is the wrong place for them.
+AGENTS.md
+PRD_Tross_LinkedIn_Profile_API.md
+START_HERE.md
+
+# START_HERE.md says explicitly: do not put this in the repo.
+AGENT_KICKOFF_PROMPT.md
+
+# Agent tooling configuration, not project source.
+.claude/
+
+# The challenge brief itself, and personal exports used for cross-checking.
+*.pdf
+Engineer Hiring Challenge.pdf
+Profile-1.pdf
+
+# Private research notes.
+notes-comp
