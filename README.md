@@ -16,25 +16,35 @@ curl -H "X-API-Key: demo-key" \
 
 ## Try it
 
-The demo runs on Render's free tier, which sleeps when idle. **The first request
-after about fifteen minutes of inactivity is a cold start and takes 30 to 60
-seconds** while the container wakes. Warm it first and everything after is
-fast:
+> [!IMPORTANT]
+> **The first request may take 30 to 60 seconds.** This runs on Render's free
+> tier, which sleeps after about fifteen minutes of inactivity. That first call
+> is waking the container, not doing any work. Warm it up first and everything
+> after is fast:
+>
+> ```bash
+> curl https://scrape-linkedin-boe4.onrender.com/health
+> ```
 
-```bash
-curl https://scrape-linkedin-boe4.onrender.com/health
-```
+> [!NOTE]
+> **Our LinkedIn session has probably expired by the time you read this.**
+> A `li_at` cookie lasts weeks, submissions get read later than that, and the
+> account we tested with was soft blocked once already for making too many
+> requests too quickly.
+>
+> That is expected, and the demo is built for it. These six profiles are
+> pre-cached and return real data with **no live session at all**:
+>
+> ```
+> williamhgates   reidhoffman   rajshamani   cachemoney   cooktim   tmsagarofficial
+> ```
+>
+> Check `/health` to see the session state, and `GET /v1/cache` to see exactly
+> what is cached. Any other profile needs a live fetch, and if ours is dead you
+> get a clear **503** rather than invented data.
 
-These profiles are pre-cached and answer instantly, even if our LinkedIn
-session has expired by the time you read this:
-
-```
-williamhgates   reidhoffman   rajshamani   cachemoney   cooktim   tmsagarofficial
-```
-
-Anything else needs a live fetch. If ours is blocked you will get a clear 503
-rather than invented data. You can also send your own session and bypass ours
-entirely:
+If you want live data on an arbitrary profile, send your own session and bypass
+ours entirely:
 
 ```bash
 curl -H "X-API-Key: demo-key" \
@@ -43,8 +53,11 @@ curl -H "X-API-Key: demo-key" \
      "https://scrape-linkedin-boe4.onrender.com/v1/profile?url=https://www.linkedin.com/in/someone/"
 ```
 
-Your cookies are never logged, never cached and never persisted. There are
-tests for each of those three.
+> [!TIP]
+> Your cookies are never logged, never cached and never persisted, and there are
+> tests for each of those three. They do still transit a server you do not
+> control, so if that matters, clone the repo and run it locally instead. It
+> takes about a minute.
 
 ---
 
@@ -81,16 +94,18 @@ tests for each of those three.
 }
 ```
 
-**Read `_meta` before trusting a field.** Three things there matter:
+> [!IMPORTANT]
+> **Read `_meta` before trusting a field.** Three things there matter:
 
-* `parse_confidence` says `"parsed"` when a value was recovered by regex from a
-  display string like `"Aug 2022 - Jul 2025"`, and `"raw"` when LinkedIn gave it
-  to us typed. Most dates are parsed. That is a real difference in reliability
-  and we would rather show it than hide it.
-* `coverage` separates "this member has none" from "LinkedIn only sent us the
-  first two". Where LinkedIn states a total we record it exactly. Where it does
-  not, `total` stays null instead of us guessing.
-* `source` is `live`, `cache` or `partial`.
+>
+> * `parse_confidence` says `"parsed"` when a value was recovered by regex from
+>   a display string like `"Aug 2022 - Jul 2025"`, and `"raw"` when LinkedIn
+>   gave it to us typed. Most dates are parsed. That is a real difference in
+>   reliability and we would rather show it than hide it.
+> * `coverage` separates "this member has none" from "LinkedIn only sent us the
+>   first two". Where LinkedIn states a total we record it exactly. Where it
+>   does not, `total` stays null instead of us guessing.
+> * `source` is `live`, `cache` or `partial`.
 
 ---
 
@@ -250,9 +265,11 @@ call LinkedIn. That is enforced, not just intended: it caught us once.
 Running on **Render free tier, Singapore region**, which is the closest region
 to where the session cookie was issued.
 
-Free tier means no persistent disk and the instance sleeps, so the pre-seeded
-cache is supplied as a base64 secret file that loads at startup. The seed is
-scraped profile data and never enters the repository.
+> [!NOTE]
+> Free tier means **no persistent disk** and the instance **sleeps when idle**.
+> The pre-seeded cache is therefore supplied as a base64 secret file that loads
+> at startup, so a cold start still comes up able to answer. The seed is scraped
+> profile data and never enters the repository.
 
 Full notes, including Cloud Run and other hosts, are in
 [DEPLOYMENT.md](DEPLOYMENT.md). One correction worth repeating here: we
@@ -340,7 +357,9 @@ open for what.
 
 ## Legal
 
-**This violates LinkedIn's User Agreement.** Not a grey area.
+> [!CAUTION]
+> **This violates LinkedIn's User Agreement.** Not a grey area. Read this
+> section before running it against anything you care about.
 
 LinkedIn litigates. Proxycurl, a funded business built on exactly this, shut
 down in 2025 citing LinkedIn's legal resources, ending in a permanent injunction
