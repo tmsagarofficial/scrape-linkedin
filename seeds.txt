@@ -1,0 +1,26 @@
+# Profiles used for cache seeding (scripts/seed_cache.py) and the coverage
+# survey (scripts/coverage_report.py).
+#
+# URLs only. AGENTS.md §9: seed URLs are fine to commit; the scraped bodies are
+# not, and the cache DB they populate is gitignored.
+#
+# Chosen to be awkward rather than convenient, per §10 — a survey of tidy
+# profiles measures nothing. Annotated with what each is meant to exercise.
+
+# --- canonical, widely known: verifies out-of-network visibility -------------
+https://www.linkedin.com/in/williamhgates/          # huge following, 3rd degree
+https://www.linkedin.com/in/satyanadella/           # ditto
+https://www.linkedin.com/in/reidhoffman/            # LinkedIn co-founder
+
+# --- profiles already validated against, with known expected shapes ----------
+https://www.linkedin.com/in/tmsagarofficial/        # multi-role employer, empty About
+https://www.linkedin.com/in/rajshamani/             # 1.8M followers, no education
+https://www.linkedin.com/in/cachemoney/             # two degrees, recommendations
+
+# --- shapes still under-tested ----------------------------------------------
+# Add profiles that exercise these and re-run the survey:
+#   - non-Latin names (Devanagari, CJK, Cyrillic)
+#   - a non-English defaultLocale (AGENTS.md §2.6)
+#   - 15+ positions over a long career
+#   - a minimal profile: no about, no skills, no education
+#   - a renamed or deleted vanity URL (expected: 404)

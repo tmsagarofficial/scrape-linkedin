@@ -1,0 +1,12 @@
+{
+  "_comment": "Copy to scrub_map.local.json (gitignored) and fill in real values from your own capture. Keys are the real strings; values are the synthetic replacements written to the committed fixture.",
+  "real-vanity-slug": "jordan-rivera",
+  "RealFirstName": "Jordan",
+  "RealLastName": "Rivera",
+  "ACoAA<real durable profile id>": "ACoAAB0000FIXTUREPROFILEID0000000000000",
+  "Real School Name": "Northgate Institute of Technology",
+  "Real Employer Name": "Globex",
+  "Real City, Region, Country": "Springfield, Ohio, United States",
+  "company/<real id>": "company/1000001",
+  "school/<real id>": "school/2000001"
+}
