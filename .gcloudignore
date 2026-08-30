@@ -1,0 +1,37 @@
+# What NOT to upload to Cloud Build.
+#
+# gcloud falls back to .gitignore when this file is absent, which would exclude
+# seed-cache.db — the one artefact the image genuinely needs. This file exists
+# to keep that single exception while still excluding everything sensitive.
+#
+# seed-cache.db is deliberately NOT listed: it is uploaded to Cloud Build and
+# baked into the image, and never reaches the public repository.
+
+.git/
+.gitignore
+venv/
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Credentials and captures — never leave this machine.
+.env
+*.har
+*.pdf
+docs/evidence/raw/
+docs/evidence/request-log.jsonl
+scripts/scrub_map.local.json
+notes-comp
+
+# Working files.
+cache.db*
+demo-cache.db*
+profile_output*.json
+
+# Not part of the deliverable.
+AGENTS.md
+PRD_Tross_LinkedIn_Profile_API.md
+START_HERE.md
+AGENT_KICKOFF_PROMPT.md
+.claude/
