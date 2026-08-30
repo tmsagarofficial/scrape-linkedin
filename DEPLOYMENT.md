@@ -69,7 +69,7 @@ Required. Every host below terminates TLS for you.
 | `PROXY_URL` | strongly recommended | Residential egress for LinkedIn traffic. |
 | `CACHE_PATH` | recommended | Point at a mounted volume. |
 | `IMPERSONATE` | no | TLS profile; defaults to `chrome142`. |
-| `CACHE_TTL_SECONDS` | no | Default 86400. |
+| `CACHE_TTL_SECONDS` | **yes, for a demo** | Default 86400 (24 h) — far too short. Seeded entries expire within a day, after which every request attempts a live fetch, spends budget, and falls back to stale. Set **2592000** (30 days) so seeded profiles serve as clean cache hits. |
 | `RATE_LIMIT_PER_MIN` | no | Outbound cap; default 20. |
 
 `LI_USER` / `LI_PASS` exist for the login flow but are expected to fail against
